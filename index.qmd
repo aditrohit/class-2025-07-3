@@ -1,0 +1,83 @@
+---
+title: "Seattle Weather Animation"
+format: html
+execute:
+  echo: false
+  warning: false
+  error: false
+  message: false
+---
+
+```{r setup}
+#| message: false
+#| warning: false
+#| echo: false
+#| output: false
+
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+library(magick)
+
+# Your data setup
+set.seed(123)
+days <- 1:365
+temps <- 50 + 30 * sin(2 * pi * (days - 80) / 365) + rnorm(365, 0, 8)
+date_seq <- seq.Date(from = as.Date("2021-01-01"), by = "day", length.out = 365)
+
+data <- data.frame(
+  date = date_seq,
+  day_of_year = yday(date_seq),
+  max_temp = temps
+)
+
+
+data <- data %>% 
+  mutate(recent = ifelse(date > max(date) - 3, "Last 3 days", "Other days"))
+
+# Create frames
+cat("Creating animation frames...\n")
+frame_days <- seq(10, 365, by = 4)
+frame_files <- character(length(frame_days))
+
+for(i in seq_along(frame_days)) {
+  current_day <- frame_days[i]
+  current_data <- data[data$day_of_year <= current_day, ]
+  
+  p_frame <- ggplot(current_data, aes(x = day_of_year, y = max_temp)) +
+    geom_point(aes(color = recent), alpha = 0.4) +
+    geom_point(data = filter(current_data, recent == "Last 3 days"), 
+               size = 3, color = "brown") +
+    scale_color_manual(values = c("Other days" = "grey70", "Last 3 days" = "brown")) +
+    labs(
+      title = "Daily maximum temperatures in Seattle, 2021",
+      subtitle = paste("Day of year:", current_day),
+      x = "Day of Year",
+      y = "Temperature (°F)"
+    ) +
+    theme_minimal() +
+    theme(legend.position = "none") +
+    xlim(1, 365) +
+    ylim(min(data$max_temp), max(data$max_temp))
+  
+  filename <- paste0("temp_frame_", sprintf("%03d", i), ".png")
+  ggsave(filename, p_frame, width = 7, height = 5, dpi = 100)
+  frame_files[i] <- filename
+  
+  if(i %% 10 == 0) cat("Created frame", i, "of", length(frame_days), "\n")
+}
+
+# Create GIF
+cat("Creating GIF...\n")
+img_frames <- image_read(frame_files)
+animation <- image_animate(img_frames, fps = 10)
+image_write(animation, "seattle_temps_animation.gif")
+
+# Clean up
+file.remove(frame_files)
+cat("Animation saved as seattle_temps_animation.gif\n")
+```
+
+
+![Daily maximum temperatures in Seattle, 2021](seattle_temps_animation.gif){fig-align="center"}
+
